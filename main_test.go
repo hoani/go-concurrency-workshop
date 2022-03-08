@@ -1,18 +1,39 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func Test_RaceCondition(t *testing.T) {
+
+	expected := []string{"Knock knock\n", "Who's there\n", "Race condtion\n"}
+	results := []string{}
+
+	srv := httptest.NewServer(GetRouter())
+	defer srv.Close()
+
+	callServer := func(path string) {
+		result, err := responseStringFromServerCall(path)
+		assert.Nil(t, err)
+		results = append(results, result)
+	}
+
+	go callServer(srv.URL + "/line1")
+	go callServer(srv.URL + "/line2")
+	go callServer(srv.URL + "/line3")
+
+	time.Sleep(time.Second)
+
+	assert.Equal(t, expected, results)
+}
 
 // func Test_RaceCondition(t *testing.T) {
 
@@ -52,10 +73,8 @@ func Test_RaceCondition_fixed(t *testing.T) {
 	var resultsMu sync.Mutex
 	results := []string{}
 
-	addr, err := getFreePort()
-	assert.Nil(t, err)
-	t.Log(addr)
-	srv := StartServer(addr)
+	srv := httptest.NewServer(GetRouter())
+	defer srv.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(len(expected))
@@ -75,9 +94,9 @@ func Test_RaceCondition_fixed(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	go callServer(addr + "/line1")
-	go callServer(addr + "/line2")
-	go callServer(addr + "/line3")
+	go callServer(srv.URL + "/line1")
+	go callServer(srv.URL + "/line2")
+	go callServer(srv.URL + "/line3")
 
 	done := make(chan struct{})
 	go func() {
@@ -100,27 +119,12 @@ func Test_RaceCondition_fixed(t *testing.T) {
 		assert.Contains(t, results, sentence)
 	}
 
-	assert.Nil(t, srv.Shutdown(context.Background()))
 }
 
 // Test Helpers
 
-func getFreePort() (string, error) {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		return "", err
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		return "", err
-	}
-	defer l.Close()
-	return fmt.Sprintf(":%v", l.Addr().(*net.TCPAddr).Port), nil
-}
-
 func responseStringFromServerCall(path string) (string, error) {
-	resp, err := http.Get("http://localhost" + path)
+	resp, err := http.Get(path)
 	if err != nil {
 		return "", err
 	}

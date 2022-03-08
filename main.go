@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 func GetRouter() http.Handler {
@@ -21,18 +19,7 @@ func GetRouter() http.Handler {
 	return sm
 }
 
-func StartServer(addr string) *http.Server {
-	srv := &http.Server{Addr: addr}
-	go http.ListenAndServe(addr, GetRouter())
-	return srv
-}
-
 func main() {
 	fmt.Println("Starting server")
-	srv := StartServer(":8080")
-	defer srv.Close()
-
-	fmt.Print("press enter to exit")
-	input := bufio.NewScanner(os.Stdin)
-	input.Scan()
+	http.ListenAndServe(":8080", GetRouter())
 }
